@@ -1,56 +1,60 @@
+# .github/workflows/setup-100-days-js.yml
 name: "Setup 100 Days JS Project"
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  projects: write
+  contents: write      # allow writing repository contents
+  issues: write        # allow creating and modifying issues
+  # If you need broader scope (e.g., to call Projects API via GITHUB_TOKEN):
+  # permissions: write-all    # grants write to all available scopes :contentReference[oaicite:1]{index=1}
 
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Install GitHub CLI
+      - name: Install GitHub CLI & jq
         run: |
           sudo apt-get update
           sudo apt-get install -y gh jq
 
       - name: Authenticate CLI
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo $GH_TOKEN | gh auth login --with-token
+          echo "${GITHUB_TOKEN}" | gh auth login --with-token
           gh auth refresh -s project
 
       - name: Create Project Board
         id: project
         run: |
-          gh project create --owner "$GITHUB_REPOSITORY_OWNER" \
-            --title "100 Days of JS" --format json > proj.json
-          echo "::set-output name=number::$(jq -r '.number' proj.json)"
+          gh project create \
+            --owner "${{ github.repository_owner }}" \
+            --title "100 Days of JS" \
+            --format json > proj.json
+          echo "PROJECT_NUMBER=$(jq -r '.number' proj.json)" >> $GITHUB_ENV
 
-      - name: Create Milestones
+      - name: Create Weekly Milestones
         id: milestones
         run: |
           for WEEK in $(seq 1 14); do
-            gh api repos/$GITHUB_REPOSITORY/milestones \
+            gh api repos/${{ github.repository }}/milestones \
               -f title="Week $WEEK" \
               -f description="Days $(( (WEEK-1)*7 + 1 ))–$(( WEEK*7 ))" \
               --jq '.number' \
               >> ms.txt
           done
-          echo "::set-output name=list::$(paste -sd, ms.txt)"
+          echo "MILESTONE_LIST=$(paste -sd, ms.txt)" >> $GITHUB_ENV
 
-      - name: Create Issues & Add to Project
+      - name: Create Day Issues & Add to Project
         run: |
-          PROJECT_NUMBER=${{ steps.project.outputs.number }}
-          IFS=, read -r -a MILESTONES <<< "${{ steps.milestones.outputs.list }}"
+          IFS=, read -r -a MILESTONES <<< "${MILESTONE_LIST}"
           for DAY in $(seq 1 100); do
-            WEEK_INDEX=$(( (DAY-1)/7 ))
-            MNUM=${MILESTONES[$WEEK_INDEX]}
+            WEEK_IDX=$(( (DAY-1)/7 ))
+            MNUM=${MILESTONES[$WEEK_IDX]}
             ISSUE_JSON=$(gh issue create \
               --title "[Day $DAY] JS Project" \
               --body-file .github/ISSUE_TEMPLATE/daily.yml \
@@ -58,5 +62,13 @@ jobs:
               --label "day-$DAY" \
               --format json)
             NUM=$(echo $ISSUE_JSON | jq -r '.number')
-            gh project item-add $PROJECT_NUMBER --issue "$GITHUB_REPOSITORY#$NUM"
+            gh project item-add $PROJECT_NUMBER --issue "${{ github.repository }}#$NUM"
           done
+
+      # Optional: If GITHUB_TOKEN lacks 'project' scope, use a PAT:
+      # - name: Authenticate CLI with PAT
+      #   env:
+      #     PAT_PROJECTS: ${{ secrets.PAT_PROJECTS }}
+      #   run: |
+      #     echo "${PAT_PROJECTS}" | gh auth login --with-token
+      #     gh auth refresh -s project
