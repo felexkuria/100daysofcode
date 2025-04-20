@@ -1,0 +1,62 @@
+name: "Setup 100 Days JS Project"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  projects: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh jq
+
+      - name: Authenticate CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo $GH_TOKEN | gh auth login --with-token
+          gh auth refresh -s project
+
+      - name: Create Project Board
+        id: project
+        run: |
+          gh project create --owner "$GITHUB_REPOSITORY_OWNER" \
+            --title "100 Days of JS" --format json > proj.json
+          echo "::set-output name=number::$(jq -r '.number' proj.json)"
+
+      - name: Create Milestones
+        id: milestones
+        run: |
+          for WEEK in $(seq 1 14); do
+            gh api repos/$GITHUB_REPOSITORY/milestones \
+              -f title="Week $WEEK" \
+              -f description="Days $(( (WEEK-1)*7 + 1 ))–$(( WEEK*7 ))" \
+              --jq '.number' \
+              >> ms.txt
+          done
+          echo "::set-output name=list::$(paste -sd, ms.txt)"
+
+      - name: Create Issues & Add to Project
+        run: |
+          PROJECT_NUMBER=${{ steps.project.outputs.number }}
+          IFS=, read -r -a MILESTONES <<< "${{ steps.milestones.outputs.list }}"
+          for DAY in $(seq 1 100); do
+            WEEK_INDEX=$(( (DAY-1)/7 ))
+            MNUM=${MILESTONES[$WEEK_INDEX]}
+            ISSUE_JSON=$(gh issue create \
+              --title "[Day $DAY] JS Project" \
+              --body-file .github/ISSUE_TEMPLATE/daily.yml \
+              --milestone $MNUM \
+              --label "day-$DAY" \
+              --format json)
+            NUM=$(echo $ISSUE_JSON | jq -r '.number')
+            gh project item-add $PROJECT_NUMBER --issue "$GITHUB_REPOSITORY#$NUM"
+          done
