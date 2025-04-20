@@ -1,15 +1,18 @@
-# .github/workflows/auto-100-days-js.yml
-name: Auto‑populate 100 Days of JS
+# .github/workflows/setup-100-days-js.yml
+
+name: "Setup 100 Days JS Project"
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write     # required for gh CLI to write files (used by checkout)
-  issues: write       # to create issues
+  contents: write
+  issues: write
 
 jobs:
   setup:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repository
