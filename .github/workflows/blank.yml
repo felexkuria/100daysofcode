@@ -4,16 +4,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write        # allow reading/writing code
-  issues: write          # allow creating & updating issues
-  # If you need broad REST/GraphQL API access beyond these, you can use:
-  # permissions: write-all
+  contents: write      # allow reading & writing code
+  issues: write        # allow issue operations
 
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
-    # Provide your PAT so gh CLI can create projects
     env:
+      # Use your classic PAT with project scope here
       GH_TOKEN: ${{ secrets.PAT_PROJECTS }}
 
     steps:
@@ -51,12 +49,12 @@ jobs:
           for DAY in $(seq 1 100); do
             IDX=$(( (DAY-1)/7 ))
             MNUM=${MILESTONES[$IDX]}
-            ISSUE=$(gh issue create \
+            ISSUE_JSON=$(gh issue create \
               --title "[Day $DAY] JS Project" \
               --body-file .github/ISSUE_TEMPLATE/daily.yml \
               --milestone $MNUM \
               --label "day-$DAY" \
               --format json)
-            NUM=$(echo $ISSUE | jq -r '.number')
+            NUM=$(echo $ISSUE_JSON | jq -r '.number')
             gh project item-add $PROJECT_NUMBER --issue "${{ github.repository }}#$NUM"
           done
