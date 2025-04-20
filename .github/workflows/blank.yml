@@ -4,16 +4,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write      # allow reading and writing repository contents
-  issues: write        # allow creating & modifying issues
-
-# Set GH_TOKEN so gh CLI will authenticate automatically
-env:
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  contents: write        # allow reading/writing code
+  issues: write          # allow creating & updating issues
+  # If you need broad REST/GraphQL API access beyond these, you can use:
+  # permissions: write-all
 
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
+    # Provide your PAT so gh CLI can create projects
+    env:
+      GH_TOKEN: ${{ secrets.PAT_PROJECTS }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
